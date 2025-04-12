@@ -8,62 +8,39 @@ async function generateImage() {
         return;
     }
 
-    statusElement.textContent = "Генерация... (может занять до 1 минуты)";
+    statusElement.textContent = "Генерация... (ожидайте 10-30 секунд)";
     imageElement.style.display = 'none';
 
     try {
-        // 1. Проверяем статус модели
-        const modelStatus = await fetch(
-            'https://api-inference.huggingface.co/status/stabilityai/stable-diffusion-xl-base-1.0',
-            {
-                headers: {
-                    'Authorization': 'Bearer ВАШ_НАСТОЯЩИЙ_КЛЮЧ', // Замените на реальный!
-                    'Content-Type': 'application/json',
-                }
-            }
-        );
+        // Вариант 1: Альтернативный бесплатный API (не требует ключа)
+        const response = await fetch('https://api.deepai.org/api/text2img', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                text: prompt,
+                grid_size: "1"
+            })
+        });
 
-        // 2. Если модель не готова - запускаем
-        if (!modelStatus.ok) {
-            await fetch(
-                'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0',
-                {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ВАШ_НАСТОЯЩИЙ_КЛЮЧ',
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ options: { wait_for_model: true } })
-                }
-            );
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.output || "Ошибка API");
         }
 
-        // 3. Делаем запрос на генерацию
-        const response = await fetch(
-            'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0',
-            {
-                method: 'POST',
-                headers: {
-                    'Authorization': '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',
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 
-                    inputs: prompt,
-                    options: { wait_for_model: true }
-                }),
-            }
-        );
-
-        if (!response.ok) throw new Error(await response.text());
-
-        const imageBlob = await response.blob();
-        const imageUrl = URL.createObjectURL(imageBlob);
+        const result = await response.json();
         
-        imageElement.src = imageUrl;
+        if (!result.output_url) {
+            throw new Error("Не удалось сгенерировать изображение");
+        }
+
+        imageElement.src = result.output_url;
         imageElement.style.display = 'block';
-        statusElement.textContent = "Готово!";
+        statusElement.textContent = "Готово! Нажмите для сохранения";
+
     } catch (error) {
         statusElement.textContent = `Ошибка: ${error.message}`;
-        console.error(error);
+        console.error("Детали ошибки:", error);
     }
 }
