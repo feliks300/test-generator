@@ -8,21 +8,53 @@ async function generateImage() {
         return;
     }
 
-    statusElement.textContent = "Генерация...";
+    statusElement.textContent = "Генерация... (может занять до 1 минуты)";
     imageElement.style.display = 'none';
 
     try {
-        // Используем бесплатный демо-API (ограничено 50 запросами/день)
-        const response = await fetch('https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0', {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer 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',
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ inputs: prompt }),
-        });
+        // 1. Проверяем статус модели
+        const modelStatus = await fetch(
+            'https://api-inference.huggingface.co/status/stabilityai/stable-diffusion-xl-base-1.0',
+            {
+                headers: {
+                    'Authorization': 'Bearer ВАШ_НАСТОЯЩИЙ_КЛЮЧ', // Замените на реальный!
+                    'Content-Type': 'application/json',
+                }
+            }
+        );
 
-        if (!response.ok) throw new Error('Ошибка API');
+        // 2. Если модель не готова - запускаем
+        if (!modelStatus.ok) {
+            await fetch(
+                'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ВАШ_НАСТОЯЩИЙ_КЛЮЧ',
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ options: { wait_for_model: true } })
+                }
+            );
+        }
+
+        // 3. Делаем запрос на генерацию
+        const response = await fetch(
+            'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0',
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': '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',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    inputs: prompt,
+                    options: { wait_for_model: true }
+                }),
+            }
+        );
+
+        if (!response.ok) throw new Error(await response.text());
 
         const imageBlob = await response.blob();
         const imageUrl = URL.createObjectURL(imageBlob);
@@ -31,6 +63,7 @@ async function generateImage() {
         imageElement.style.display = 'block';
         statusElement.textContent = "Готово!";
     } catch (error) {
-        statusElement.textContent = "Ошибка: " + error.message;
+        statusElement.textContent = `Ошибка: ${error.message}`;
+        console.error(error);
     }
 }
