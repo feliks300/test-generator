@@ -8,82 +8,67 @@ async function generateImage() {
         return;
     }
 
-    statusElement.textContent = "Генерация... (это займет 20-40 секунд)";
+    statusElement.textContent = "Генерация...";
     imageElement.style.display = 'none';
 
     try {
-        // Вариант 1: Рабочий API без ключа (для теста)
+        // Вариант 1: Основной API
         const response = await fetch('https://api-inference.huggingface.co/models/CompVis/stable-diffusion-v1-4', {
             method: 'POST',
             headers: {
-                'Authorization': 'Bearer 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 ', 
+                'Authorization': 'Bearer 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 ', // 
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({ inputs: prompt }),
         });
 
-        // Проверяем статус ответа
-        if (response.status === 503) {
-            // Модель загружается
-            const data = await response.json();
-            statusElement.textContent = "Модель загружается, попробуйте через 30 секунд";
-            return;
-        } else if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        // Обработка 403 ошибки
+        if (response.status === 403) {
+            throw new Error("Доступ запрещен. Проверьте API-ключ и лицензию модели");
         }
 
-        // Получаем изображение
+        // Обработка других ошибок
+        if (!response.ok) {
+            throw new Error(`Ошибка сервера: ${response.status}`);
+        }
+
         const imageBlob = await response.blob();
-        
-        if (imageBlob.size === 0) {
-            throw new Error("Получен пустой файл изображения");
-        }
-
-        const imageUrl = URL.createObjectURL(imageBlob);
-        imageElement.onload = () => {
-            URL.revokeObjectURL(imageUrl); // Освобождаем память
-        };
-        imageElement.src = imageUrl;
+        imageElement.src = URL.createObjectURL(imageBlob);
         imageElement.style.display = 'block';
-        statusElement.textContent = "Готово! Кликните правой кнопкой для сохранения";
+        statusElement.textContent = "Готово!";
 
     } catch (error) {
-        console.error("Полная ошибка:", error);
-        statusElement.textContent = `Ошибка: ${error.message}. Попробуйте другой запрос`;
-        
-        // Вариант 2: Резервный API
-        if (error.message.includes("Failed to fetch")) {
-            statusElement.textContent += "\nПробуем альтернативный источник...";
-            await tryBackupAPI(prompt, imageElement, statusElement);
-        }
+        console.error("Детали ошибки:", error);
+        statusElement.innerHTML = `
+            Ошибка: ${error.message}<br>
+            <small>Попробуйте:</small>
+            <ul>
+                <li>Проверить API-ключ</li>
+                <li>Принять лицензию модели</li>
+                <li>Использовать <button onclick="useBackupAPI()">резервный API</button></li>
+            </ul>
+        `;
     }
 }
 
-async function tryBackupAPI(prompt, imageElement, statusElement) {
+// Резервный API
+async function useBackupAPI() {
+    const prompt = document.getElementById('prompt').value;
+    const statusElement = document.getElementById('status');
+    
+    statusElement.textContent = "Пробуем альтернативный сервис...";
+    
     try {
-        const backupResponse = await fetch('https://backend.prodia.com/generate', {
+        const response = await fetch('https://api.deepai.org/api/text2img', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                prompt: prompt,
-                model: "stable_diffusion",
-                width: 512,
-                height: 512
-            })
+            headers: { 'api-key': 'quickstart-QUdJIGlzIGNvbWluZy4uLi4K' }, // Бесплатный демо-ключ
+            body: new URLSearchParams({ text: prompt })
         });
-
-        const result = await backupResponse.json();
-        if (result.imageUrl) {
-            imageElement.src = result.imageUrl;
-            imageElement.style.display = 'block';
-            statusElement.textContent = "Готово через резервный API!";
-        } else {
-            throw new Error("Резервный API не вернул изображение");
-        }
-    } catch (backupError) {
-        console.error("Ошибка резервного API:", backupError);
-        statusElement.textContent = "Все сервисы временно недоступны. Попробуйте позже";
+        
+        const data = await response.json();
+        document.getElementById('output-image').src = data.output_url;
+        statusElement.textContent = "Успешно через резервный API!";
+    } catch (error) {
+        statusElement.textContent = `Ошибка резервного API: ${error.message}`;
     }
 }
